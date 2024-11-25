@@ -1,39 +1,61 @@
 package main
 
 import (
-	"encoding/json"
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"net"
 )
 
-type Message struct {
-	Type    string `json:"type"`
-	Content string `json:"content"`
+// OutputTorque matches the C++ struct
+type OutputTorque struct {
+	State     uint8   // BYTE bState
+	Mode      uint8   // BYTE bMode
+	Pulse     float32 // float fPulse
+	Velocity  float32 // float fVelocity
+	Angle     float32 // float fAngle
+	OutTorque float32 // float fOutTorque
+	InTorque  float32 // float fInTorque
 }
 
 func main() {
-	// 서버에 연결
-	conn, err := net.Dial("tcp", "localhost:8080")
+	// Connect to INNO program's port
+	conn, err := net.Dial("tcp", "localhost:1998")
 	if err != nil {
 		fmt.Println("Error connecting to server:", err)
 		return
 	}
 	defer conn.Close()
 
-	// JSON 메시지 전송
-	msg := Message{Type: "greeting", Content: "Hello, server!"}
-	encoder := json.NewEncoder(conn)
-	if err := encoder.Encode(&msg); err != nil {
-		fmt.Println("Error encoding JSON:", err)
-		return
-	}
+	// Create buffer to receive data
+	buffer := make([]byte, 1024)
 
-	// JSON 응답 수신
-	var response Message
-	decoder := json.NewDecoder(conn)
-	if err := decoder.Decode(&response); err != nil {
-		fmt.Println("Error decoding JSON:", err)
-		return
+	for {
+		// Read incoming data
+		n, err := conn.Read(buffer)
+		if err != nil {
+			fmt.Println("Error reading:", err)
+			return
+		}
+
+		if n > 0 {
+			// Convert binary data to struct
+			data := OutputTorque{}
+			reader := bytes.NewReader(buffer[:n])
+			if err := binary.Read(reader, binary.LittleEndian, &data); err != nil {
+				fmt.Println("Error decoding data:", err)
+				continue
+			}
+
+			// Print received data
+			fmt.Printf("Received Data:\n")
+			fmt.Printf("State: %d\n", data.State)
+			fmt.Printf("Mode: %d\n", data.Mode)
+			fmt.Printf("Pulse: %.2f\n", data.Pulse)
+			fmt.Printf("Velocity: %.2f\n", data.Velocity)
+			fmt.Printf("Angle: %.2f\n", data.Angle)
+			fmt.Printf("OutTorque: %.2f\n", data.OutTorque)
+			fmt.Printf("InTorque: %.2f\n", data.InTorque)
+		}
 	}
-	fmt.Printf("Received response: %v\n", response)
 }
